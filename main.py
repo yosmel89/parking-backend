@@ -19,23 +19,34 @@ CACHE_TTL = 120
 
 @app.on_event("startup")
 async def startup():
-    await poll_all()
+    try:
+        await poll_all()
+    except Exception as e:
+        print(f"Startup poll failed (will retry later): {e}")
 
 
 async def poll_all():
     async with httpx.AsyncClient(timeout=30) as c:
-        inv = await c.get(
-            ARCGIS,
-            params={
-                "where": "1=1",
-                "outFields": "*",
-                "f": "json",
-                "resultRecordCount": 5000,
-            },
-        )
-        occ = await c.get(PARKENDD)
+        try:
+            inv = await c.get(
+                ARCGIS,
+                params={
+                    "where": "1=1",
+                    "outFields": "*",
+                    "f": "json",
+                    "resultRecordCount": 5000,
+                },
+            )
+            inv_json = inv.json()
+        except Exception:
+            inv_json = {"features": []}
 
-    inv_json = inv.json()
+        try:
+            occ = await c.get(PARKENDD)
+            occ_json = occ.json()
+        except Exception:
+            occ_json = {"data": []}
+
     inventory = {
         f["attributes"]["METER_ID"]: f["attributes"]
         for f in inv_json.get("features", [])
@@ -43,7 +54,7 @@ async def poll_all():
     }
 
     merged = []
-    for s in occ.json().get("data", []):
+    for s in occ_json.get("data", []):
         meter_id = s.get("id")
         a = inventory.get(meter_id, {})
         rate = a.get("RATE_PER_HOUR", 0) or 0
@@ -106,3 +117,8 @@ def parking(
 async def poll():
     await poll_all()
     return {"ok": True}
+
+
+@app.get("/")
+async def root():
+    return {"status": "ok"}
