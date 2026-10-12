@@ -14,7 +14,7 @@ ARCGIS = "https://services.arcgis.com/YOUR_ORG/arcgis/rest/services/MiamiBeach_M
 PARKENDD = "https://api.parkendd.de/dresden"
 
 CACHE_KEY = "parking:all"
-CACHE_TTL = 120  # seconds
+CACHE_TTL = 120
 
 
 @app.on_event("startup")
@@ -37,7 +37,8 @@ async def poll_all():
 
     inv_json = inv.json()
     inventory = {
-        f ["METER_ID" ])
+        f["attributes"]["METER_ID"]: f["attributes"]
+        for f in inv_json.get("features", [])
         if f.get("attributes", {}).get("METER_ID")
     }
 
@@ -91,11 +92,13 @@ def parking(
     lng: float = Query(...),
     radius: float = Query(1.0, gt=0, le=50),
 ):
-    data = json.loads(r.get(CACHE_KEY) or "[ s
+    data = json.loads(r.get(CACHE_KEY) or "[]")
+    return [
+        s
         for s in data
         if s.get("lat") is not None
         and s.get("lng") is not None
-        and haversine(lat, lng, s , s ) <= radius
+        and haversine(lat, lng, s["lat"], s["lng"]) <= radius
     ]
 
 
